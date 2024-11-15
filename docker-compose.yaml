@@ -4,7 +4,6 @@ services:
   mysql:
     image: mysql:8.0
     container_name: mysql_container
-    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: password  # Set your root password
       MYSQL_DATABASE: mydb            # Create a default database
@@ -12,18 +11,32 @@ services:
       - "3306:3306"
     volumes:
       - ./mysql:/docker-entrypoint-initdb.d  # Mount init script to create DB and tables
-
+    networks:
+      - twotier
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
   flask-app:
     build:
       context: .                      # Path to your Flask app
       dockerfile: Dockerfile           # Dockerfile for the Flask app
     container_name: flask_app_container
-    depends_on:
-      - mysql                          # Ensure MySQL starts before Flask
     ports:
       - "5000:5000"
     environment:
-      FLASK_ENV: development           # Set Flask environment
-      DATABASE_URL: mysql+pymysql://root:password@mysql:3306/mydb  # Database connection string
-      restart: always
+      MYSQL_HOST: mysql_container
+      MYSQL_ROOT_USER: root
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: mydb
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - twotier
+volumes:
+  mysql:
+networks:
+  twotier:
                       # Named volume for MySQL data persistence
